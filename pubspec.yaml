@@ -1,0 +1,26 @@
+name: fashion_store_app
+description: "A new Flutter project."
+publish_to: 'none'
+version: 0.1.0
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_core: ^4.5.0
+  cloud_firestore: ^6.1.3
+  firebase_storage: ^13.1.0
+  file_picker: ^10.3.10
+  connectivity_plus: ^7.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - sample_data/fashion_products.json
