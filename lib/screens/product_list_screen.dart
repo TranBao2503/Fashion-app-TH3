@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:file_picker/file_picker.dart';
+import 'product_detail_screen.dart';
 import '../models/product.dart';
 import '../services/product_service.dart';
 import '../widgets/product_card.dart';
@@ -20,76 +22,125 @@ class _ProductListScreenState extends State<ProductListScreen> {
   late Future<List<Product>> _productsFuture;
   final Connectivity _connectivity = Connectivity();
   StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  Timer? _internetMonitorTimer;
   bool _isSaving = false;
   int _selectedTabIndex = 0;
+  bool _isOffline = false;
+  bool _isCheckingInternet = false;
 
   @override
   void initState() {
     super.initState();
-    _productsFuture = Future.value(const []);
-    _checkConnectivityOnStart();
-    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((
-      results,
-    ) {
-      if (!mounted) {
-        return;
-      }
-
-      final hasNetwork = results.any(
-        (result) => result != ConnectivityResult.none,
-      );
-      if (hasNetwork) {
-        setState(() {
-          _productsFuture = _productService.fetchProducts();
-        });
-      }
+    _productsFuture = _fetchProductsWithInternetCheck();
+    _syncInternetState();
+    _internetMonitorTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      _syncInternetState();
+    });
+    _connectivitySubscription = _connectivity.onConnectivityChanged.listen((_) {
+      _syncInternetState(refreshWhenOnline: true);
     });
   }
 
   @override
   void dispose() {
     _connectivitySubscription?.cancel();
+    _internetMonitorTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _checkConnectivityOnStart() async {
-    final results = await _connectivity.checkConnectivity();
-    final hasNetwork = results.any(
-      (result) => result != ConnectivityResult.none,
-    );
-
-    if (!mounted) {
-      return;
-    }
-
-    setState(() {
-      _productsFuture = hasNetwork
-          ? _productService.fetchProducts()
-          : Future.error(
-              Exception('Mất kết nối mạng. Vui lòng bật mạng và thử lại!'),
-            );
-    });
-  }
-
   Future<void> _retry() async {
-    final results = await _connectivity.checkConnectivity();
-    final hasNetwork = results.any(
-      (result) => result != ConnectivityResult.none,
-    );
+    if (!mounted) {
+      return;
+    }
+
+    _syncInternetState(refreshWhenOnline: true);
+
+    setState(() {
+      _productsFuture = _fetchProductsWithInternetCheck();
+    });
+  }
+
+  Future<void> _syncInternetState({bool refreshWhenOnline = false}) async {
+    if (_isCheckingInternet) {
+      return;
+    }
+
+    _isCheckingInternet = true;
+    final hasInternet = await _hasRealInternetAccess();
+    _isCheckingInternet = false;
 
     if (!mounted) {
       return;
     }
 
-    setState(() {
-      _productsFuture = hasNetwork
-          ? _productService.fetchProducts()
-          : Future.error(
-              Exception('Mất kết nối mạng. Vui lòng bật mạng và thử lại!'),
-            );
-    });
+    if (!hasInternet) {
+      if (_isOffline) {
+        return;
+      }
+
+      _isOffline = true;
+      setState(() {
+        _productsFuture = Future.error(
+          Exception('Mất internet. Vui lòng bật mạng và thử lại!'),
+        );
+      });
+      return;
+    }
+
+    final wasOffline = _isOffline;
+    _isOffline = false;
+
+    if (wasOffline || refreshWhenOnline) {
+      setState(() {
+        _productsFuture = _productService.fetchProducts();
+      });
+    }
   }
 
+  Future<List<Product>> _fetchProductsWithInternetCheck() async {
+    final hasInternet = await _hasRealInternetAccess();
+    if (!hasInternet) {
+      _isOffline = true;
+      throw Exception('Mất internet. Vui lòng bật mạng và thử lại!');
+    }
+
+    _isOffline = false;
+    return _productService.fetchProducts();
+  }
+
+  Future<bool> _hasRealInternetAccess() async {
+    Future<bool> pingUrl(String rawUrl) async {
+      final client = HttpClient()
+        ..connectionTimeout = const Duration(seconds: 3);
+      try {
+        final uri = Uri.parse(rawUrl);
+        final request = await client
+            .getUrl(uri)
+            .timeout(const Duration(seconds: 3));
+        request.followRedirects = true;
+        final response = await request.close().timeout(
+          const Duration(seconds: 3),
+        );
+        await response.drain<void>();
+        return response.statusCode >= 200 && response.statusCode < 500;
+      } catch (_) {
+        return false;
+      } finally {
+        client.close(force: true);
+      }
+    }
+
+    final hasGoogle204 = await pingUrl(
+      'https://clients3.google.com/generate_204',
+    );
+    if (hasGoogle204) {
+      return true;
+    }
+
+    return pingUrl('https://www.gstatic.com/generate_204');
+  }
+
+  // ignore: unused_element
   Future<void> _showAddProductDialog() async {
     final messenger = ScaffoldMessenger.of(context);
     final nameController = TextEditingController();
@@ -482,112 +533,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
     quantityController.dispose();
   }
 
-  Future<void> _confirmDeleteProduct(Product product) async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xác nhận xóa'),
-        content: Text('Bạn có chắc muốn xóa "${product.name}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Hủy'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Xóa'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldDelete != true || _isSaving) {
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      await _productService.deleteProduct(product);
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Đã xóa sản phẩm.')));
-      _retry();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Xóa thất bại: $error')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _confirmDeleteAll() async {
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xác nhận xóa tất cả'),
-        content: const Text(
-          'Bạn có chắc muốn xóa toàn bộ sản phẩm? Hành động này không thể hoàn tác.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Hủy'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Xóa tất cả'),
-          ),
-        ],
-      ),
-    );
-
-    if (shouldDelete != true || _isSaving) {
-      return;
-    }
-
-    setState(() {
-      _isSaving = true;
-    });
-
-    try {
-      await _productService.deleteAllProducts();
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Đã xóa toàn bộ sản phẩm.')));
-      _retry();
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Xóa tất cả thất bại: $error')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -595,17 +540,6 @@ class _ProductListScreenState extends State<ProductListScreen> {
       appBar: AppBar(
         title: const Text('TH3-Trần Vĩnh Bảo-2351060419'),
         centerTitle: false,
-        actions: [
-          TextButton(
-            onPressed: _isSaving ? null : _confirmDeleteAll,
-            child: const Text('Xóa tất cả'),
-          ),
-          TextButton(
-            onPressed: _isSaving ? null : _showAddProductDialog,
-            child: const Text('Thêm sản phẩm'),
-          ),
-          const SizedBox(width: 8),
-        ],
       ),
       body: FutureBuilder<List<Product>>(
         future: _productsFuture,
@@ -697,12 +631,16 @@ class _ProductListScreenState extends State<ProductListScreen> {
                   final product = products[index];
                   return ProductCard(
                     product: product,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ProductDetailScreen(product: product),
+                        ),
+                      );
+                    },
                     onEdit: _isSaving
                         ? null
                         : () => _showEditProductDialog(product),
-                    onDelete: _isSaving
-                        ? null
-                        : () => _confirmDeleteProduct(product),
                   );
                 },
               );

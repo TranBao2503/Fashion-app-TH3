@@ -5,13 +5,13 @@ import '../models/product.dart';
 class ProductCard extends StatelessWidget {
   final Product product;
   final VoidCallback? onEdit;
-  final VoidCallback? onDelete;
+  final VoidCallback? onTap;
 
   const ProductCard({
     super.key,
     required this.product,
     this.onEdit,
-    this.onDelete,
+    this.onTap,
   });
 
   @override
@@ -19,112 +19,121 @@ class ProductCard extends StatelessWidget {
     final primaryImageUrl = _normalizeUrl(product.imageUrl);
     final proxyImageUrl = _toProxyUrl(primaryImageUrl);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Expanded(
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: Container(
-                    color: Colors.grey.shade100,
-                    child: primaryImageUrl.isNotEmpty
-                        ? _ProductImage(
-                            primaryUrl: primaryImageUrl,
-                            fallbackUrl: proxyImageUrl,
-                          )
-                        : const Icon(Icons.checkroom, size: 36),
-                  ),
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: Container(
+                        color: Colors.grey.shade100,
+                        child: primaryImageUrl.isNotEmpty
+                            ? _ProductImage(
+                                primaryUrl: primaryImageUrl,
+                                fallbackUrl: proxyImageUrl,
+                              )
+                            : const Icon(Icons.checkroom, size: 36),
+                      ),
+                    ),
+                    Positioned(
+                      top: 6,
+                      left: 6,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: Colors.grey.shade300),
+                        ),
+                        child: const Text(
+                          'New',
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 0,
+                      child: PopupMenuButton<String>(
+                        icon: const Icon(Icons.more_horiz, size: 18),
+                        onSelected: (value) {
+                          if (value == 'edit') {
+                            onEdit?.call();
+                          }
+                        },
+                        itemBuilder: (context) => const [
+                          PopupMenuItem(value: 'edit', child: Text('Sửa')),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  top: 6,
-                  left: 6,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: const Text(
-                      'New',
-                      style: TextStyle(
-                        fontSize: 10,
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 4),
+                    Text(
+                      product.category,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${product.price.toStringAsFixed(0)} đ',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Còn: ${product.quantity}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
                 ),
-                Positioned(
-                  top: 2,
-                  right: 0,
-                  child: PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_horiz, size: 18),
-                    onSelected: (value) {
-                      if (value == 'edit') {
-                        onEdit?.call();
-                      }
-                      if (value == 'delete') {
-                        onDelete?.call();
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(value: 'edit', child: Text('Sửa')),
-                      PopupMenuItem(value: 'delete', child: Text('Xóa')),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  product.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  product.category,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${product.price.toStringAsFixed(0)} đ',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Còn: ${product.quantity}',
-                  style: TextStyle(fontSize: 11, color: Colors.grey.shade700),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -170,13 +179,6 @@ class _ProductImageState extends State<_ProductImage> {
   late List<String> _candidates;
   int _activeIndex = 0;
 
-  Map<String, String> get _headers => const {
-    'User-Agent':
-        'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0 Mobile Safari/537.36',
-    'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-    'Referer': 'https://www.google.com/',
-  };
-
   @override
   void initState() {
     super.initState();
@@ -203,7 +205,19 @@ class _ProductImageState extends State<_ProductImage> {
     return Image.network(
       activeUrl,
       fit: BoxFit.cover,
-      headers: _headers,
+      filterQuality: FilterQuality.medium,
+      loadingBuilder: (context, child, loadingProgress) {
+        if (loadingProgress == null) {
+          return child;
+        }
+        return const Center(
+          child: SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        );
+      },
       errorBuilder: (context, error, stackTrace) {
         if (_activeIndex < _candidates.length - 1) {
           WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'dart:convert';
 
@@ -16,7 +17,10 @@ class ProductService {
 
   Future<List<Product>> fetchProducts() async {
     try {
-      final snapshot = await firestore.collection('fashion_products').get();
+      final snapshot = await firestore
+          .collection('fashion_products')
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 8));
 
       return snapshot.docs
           .map((doc) => Product.fromMap(doc.id, doc.data()))
@@ -38,6 +42,8 @@ class ProductService {
         default:
           throw Exception('Lỗi Firestore (${error.code}): ${error.message}');
       }
+    } on TimeoutException {
+      throw Exception('Mất kết nối mạng. Vui lòng bật mạng và thử lại!');
     } catch (error) {
       throw Exception('Không thể tải dữ liệu từ Firebase: $error');
     }
